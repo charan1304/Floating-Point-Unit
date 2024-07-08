@@ -20,16 +20,18 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module mult(
-    a,b,product
+module mult#(parameter WIDTH=32,
+    parameter EXP_WIDTH=8,
+    parameter MAN_WIDTH=23,
+    parameter BIAS=127
+    )
+    (
+    a,b,product,clk
     );
-    parameter WIDTH=32;
-    parameter EXP_WIDTH=8;
-    parameter MAN_WIDTH=23;
-    parameter BIAS=127;
     
     input [WIDTH-1:0]a;
     input [WIDTH-1:0]b;
+    input clk;
     output reg [WIDTH-1:0]product;
     
     wire [EXP_WIDTH-1:0]exp_a,exp_b,exp_prod;
@@ -48,23 +50,23 @@ module mult(
     assign exp_add=man_prod[2*MAN_WIDTH+1];
     assign {over,exp_prod}=exp_a+exp_b+exp_add-BIAS;
     assign man=man_prod[2*MAN_WIDTH+1]?man_prod[2*MAN_WIDTH:MAN_WIDTH+1]:man_prod[2*MAN_WIDTH-1:MAN_WIDTH];
-    assign dif=BIAS-exp_a-exp_b;
+    assign dif=BIAS-exp_a-exp_b+1;
     assign under={{1'b1,man}>>(dif)};
     
-    always@(*)
+    always@(posedge clk)
     begin:assigning
         if(over)begin
             if(exp_a+exp_b<BIAS)
-                product={sign,{EXP_WIDTH{1'b0}},under};
+                product<={sign,{EXP_WIDTH{1'b0}},under};
             else
-            product={sign,{EXP_WIDTH{1'b1}},{MAN_WIDTH{1'b0}}};
+            product<={sign,{EXP_WIDTH{1'b1}},{MAN_WIDTH{1'b0}}};
         end
         else
         begin
             if((a[WIDTH-2:0]==0)||(b[WIDTH-2:0]==0))begin
-                product={sign,{(WIDTH-1){1'b0}}};
+                product<={sign,{(WIDTH-1){1'b0}}};
             end
-            product={sign,exp_prod,man};
+            product<={sign,exp_prod,man};
         end
     end
     

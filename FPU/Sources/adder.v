@@ -19,16 +19,19 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-module adder(
-    a,b,mode,sum
+module adder#(parameter WIDTH=32,
+    parameter EXP_WIDTH=8,
+    parameter MAN_WIDTH=23,
+    parameter BIAS=127
+    )
+    (
+    a,b,mode,sum,clk
     );
-    parameter WIDTH=32;
-    parameter EXP_WIDTH=8;
-    parameter MAN_WIDTH=23;
     
     input [WIDTH-1:0]a;
     input [WIDTH-1:0]b;
     input mode;
+    input clk;
     output [WIDTH-1:0]sum;
     
     wire [EXP_WIDTH-1:0]exp_a,exp_b,exp;
@@ -47,7 +50,10 @@ module adder(
             zero=0;
     end
     
-    mant_sign num(a,b,mode,sign,m_sum,exp);
+    mant_sign #(.WIDTH(WIDTH),.EXP_WIDTH(EXP_WIDTH),.MAN_WIDTH(MAN_WIDTH),.BIAS(BIAS))num
+    (
+        a,b,mode,clk,sign,m_sum,exp
+    );
     
     assign infinite=(&exp)|(&exp_a)|(&exp_b);
     
@@ -57,16 +63,19 @@ endmodule
 
 
 
-module mant_sign(
-    a,b,mode,sign,m_sum,exp
+module mant_sign#(parameter WIDTH=32,
+    parameter EXP_WIDTH=8,
+    parameter MAN_WIDTH=23,
+    parameter BIAS=127
+    )
+    (
+    a,b,mode,clk,sign,m_sum,exp
     );
-    parameter WIDTH=32;
-    parameter EXP_WIDTH=8;
-    parameter MAN_WIDTH=23;
 
     input [WIDTH-1:0]a;
     input [WIDTH-1:0]b;
     input mode;
+    input clk;
     output reg sign;
     output reg [MAN_WIDTH-1:0]m_sum;
     output reg [EXP_WIDTH-1:0]exp;
@@ -75,8 +84,8 @@ module mant_sign(
     wire [EXP_WIDTH-1:0]exp_dif;
     wire [MAN_WIDTH:0]m_dif;
     wire [MAN_WIDTH+1:0]sum;
-    reg [MAN_WIDTH-1:0]bigm,smallm;
-    reg [EXP_WIDTH-1:0]exp_dif1;
+    reg [MAN_WIDTH-1:0]bigm,smallm,m_sum1;
+    reg [EXP_WIDTH-1:0]exp_dif1,exp1,exp_add,exp_sub;
     reg [MAN_WIDTH+1:0]shifted;
     
     assign sign_a=a[WIDTH-1];
@@ -87,18 +96,20 @@ module mant_sign(
     
     always@(*)begin
         if(compare) begin
-            sign=sign_a;
-            bigm=a[MAN_WIDTH-1:0];
-            smallm=b[MAN_WIDTH-1:0];
-            exp=a[WIDTH-2:WIDTH-EXP_WIDTH-1];
             if(~(|exp_dif))begin
                 sign=(m_dif[MAN_WIDTH])?sign_a:sign_b;
                 bigm=(m_dif[MAN_WIDTH])?a[MAN_WIDTH-1:0]:b[MAN_WIDTH-1:0];
                 smallm=(m_dif[MAN_WIDTH])?b[MAN_WIDTH-1:0]:a[MAN_WIDTH-1:0];
-                exp=(m_dif[MAN_WIDTH])?a[WIDTH-2:WIDTH-EXP_WIDTH-1]:b[WIDTH-2:WIDTH-EXP_WIDTH-1];
-                end
-            exp_dif1=exp_dif;
+                exp1=(m_dif[MAN_WIDTH])?a[WIDTH-2:WIDTH-EXP_WIDTH-1]:b[WIDTH-2:WIDTH-EXP_WIDTH-1];
             end
+            else begin
+                sign=sign_a;
+                bigm=a[MAN_WIDTH-1:0];
+                smallm=b[MAN_WIDTH-1:0];
+                exp1=a[WIDTH-2:WIDTH-EXP_WIDTH-1];
+            end
+            exp_dif1=exp_dif;
+        end
         else begin
                 sign=sign_b;
                 bigm=b[MAN_WIDTH-1:0];
@@ -113,17 +124,114 @@ module mant_sign(
     assign sum=sub?({1'b1,bigm}-shifted):({1'b1,bigm}+shifted);
     
     always@(*)begin
-        if(sum[MAN_WIDTH+1])begin
-            exp=exp+1;
-            m_sum=sum[MAN_WIDTH:1];
-        end
-        else begin
-            m_sum=sum;
-            while(~m_sum[MAN_WIDTH-1])begin
-                m_sum=m_sum<<1;
-                exp=exp-1;
+        casez(sum)
+            25'b1????????????????????????:begin
+                exp_add=1;
+                exp_sub=0;
             end
-        end
+            25'b01???????????????????????:begin
+                exp_add=0;
+                exp_sub=0;
+            end
+            25'b001??????????????????????:begin
+                exp_add=0;
+                exp_sub=1;
+            end
+            25'b0001?????????????????????:begin
+                exp_add=0;
+                exp_sub=2;
+            end
+            25'b00001?????????????????????:begin
+                exp_add=0;
+                exp_sub=3;
+            end
+            25'b000001???????????????????:begin
+                exp_add=0;
+                exp_sub=4;
+            end
+            25'b0000001??????????????????:begin
+                exp_add=0;
+                exp_sub=5;
+            end
+            25'b00000001?????????????????:begin
+                exp_add=0;
+                exp_sub=6;
+            end
+            25'b000000001????????????????:begin
+                exp_add=0;
+                exp_sub=7;
+            end
+            25'b0000000001???????????????:begin
+                exp_add=0;
+                exp_sub=8;
+            end
+            25'b00000000001??????????????:begin
+                exp_add=0;
+                exp_sub=9;
+            end
+            25'b000000000001?????????????:begin
+                exp_add=0;
+                exp_sub=10;
+            end
+            25'b0000000000001????????????:begin
+                exp_add=0;
+                exp_sub=11;
+            end
+            25'b00000000000001????????????:begin
+                exp_add=0;
+                exp_sub=12;
+            end
+            25'b000000000000001???????????:begin
+                exp_add=0;
+                exp_sub=13;
+            end
+            25'b0000000000000001?????????:begin
+                exp_add=0;
+                exp_sub=14;
+            end
+            25'b00000000000000001????????:begin
+                exp_add=0;
+                exp_sub=15;
+            end
+            25'b000000000000000001???????:begin
+                exp_add=0;
+                exp_sub=16;
+            end
+            25'b0000000000000000001??????:begin
+                exp_add=0;
+                exp_sub=17;
+            end
+            25'b00000000000000000001?????:begin
+                exp_add=0;
+                exp_sub=18;
+            end
+            25'b000000000000000000001????:begin
+                exp_add=0;
+                exp_sub=19;
+            end
+            25'b0000000000000000000001???:begin
+                exp_add=0;
+                exp_sub=20;
+            end
+            25'b00000000000000000000001??:begin
+                exp_add=0;
+                exp_sub=21;
+            end
+            25'b000000000000000000000001?:begin
+                exp_add=0;
+                exp_sub=22;
+            end
+            25'b0000000000000000000000001:begin
+                exp_add=0;
+                exp_sub=23;
+            end
+            
+        endcase
+    end
+    
+    always@(posedge clk)begin
+        m_sum<=m_sum1;
+        exp<=exp1+exp_add-exp_sub;
     end
 
 endmodule
